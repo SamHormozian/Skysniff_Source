@@ -12,7 +12,7 @@ from dataset import GasLeakSegDataset  # Ensure dataset.py exists and works
 # --- Configuration ---
 BATCH_SIZE = 8
 NUM_EPOCHS = 5
-NUM_CLASSES = 3  # 0=background, 1=Gas Leak Day, 2=Gas Leak Night
+NUM_CLASSES = 3  # 0=Background, 1=Gas Leak Day, 2=Gas Leak Night
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ENCODER = 'resnet34'
 ENCODER_WEIGHTS = 'imagenet'
@@ -61,10 +61,45 @@ def train_one_epoch(model, loader, loss_fn, optimizer):
 
     return running_loss / len(loader)
 
+# --- IoU & Dice Metrics ---
+def compute_iou(preds, labels, num_classes):
+    ious = []
+    preds = preds.view(-1)
+    labels = labels.view(-1)
+
+    for cls in range(num_classes):
+        pred_inds = preds == cls
+        target_inds = labels == cls
+        intersection = (pred_inds & target_inds).sum().item()
+        union = (pred_inds | target_inds).sum().item()
+        if union == 0:
+            ious.append(float('nan'))
+        else:
+            ious.append(intersection / union)
+    return ious
+
+def compute_dice(preds, labels, num_classes):
+    dice_scores = []
+    preds = preds.view(-1)
+    labels = labels.view(-1)
+
+    for cls in range(num_classes):
+        pred_inds = preds == cls
+        target_inds = labels == cls
+        intersection = (pred_inds & target_inds).sum().item()
+        total = pred_inds.sum().item() + target_inds.sum().item()
+        if total == 0:
+            dice_scores.append(float('nan'))
+        else:
+            dice_scores.append(2 * intersection / total)
+    return dice_scores
+
 # --- Validation Function ---
 def validate(model, loader, loss_fn):
     model.eval()
     running_loss = 0.0
+    all_ious = []
+    all_dices = []
 
     with torch.no_grad():
         for images, masks in tqdm(loader, desc="Validation", leave=False):
@@ -73,8 +108,24 @@ def validate(model, loader, loss_fn):
 
             outputs = model(images)
             loss = loss_fn(outputs, masks)
-
             running_loss += loss.item()
+
+            preds = torch.argmax(outputs, dim=1)
+            ious = compute_iou(preds, masks, NUM_CLASSES)
+            dices = compute_dice(preds, masks, NUM_CLASSES)
+
+            all_ious.append(ious)
+            all_dices.append(dices)
+
+    mean_ious = np.nanmean(np.array(all_ious), axis=0)
+    mean_dices = np.nanmean(np.array(all_dices), axis=0)
+
+    class_names = ["Background", "Gas Leak Day", "Gas Leak Night"]
+    print("\nValidation Metrics:")
+    for i, name in enumerate(class_names):
+        print(f"{name:15s} | IoU: {mean_ious[i]:.4f} | Dice: {mean_dices[i]:.4f}")
+
+    print(f"Mean IoU: {np.nanmean(mean_ious):.4f} | Mean Dice: {np.nanmean(mean_dices):.4f}\n")
 
     return running_loss / len(loader)
 
@@ -100,14 +151,13 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     for epoch in range(NUM_EPOCHS):
-        print(f"Epoch {epoch+1}/{NUM_EPOCHS}")
+        print(f"\nEpoch {epoch + 1}/{NUM_EPOCHS}")
         train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer)
         val_loss = validate(model, val_loader, loss_fn)
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
     torch.save(model.state_dict(), "unet_gas_leak_segmentation.pth")
     print("✅ Model saved to 'unet_gas_leak_segmentation.pth'")
-
 
 if __name__ == "__main__":
     main()
