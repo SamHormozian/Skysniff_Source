@@ -1,10 +1,14 @@
+# streamlit_app.py
+
 import streamlit as st
 import cv2
 import numpy as np
+import os
 import time
 from PIL import Image
 from ultralytics import YOLO
 import random
+import sensorfusion  # custom module
 
 # MUST BE FIRST STREAMLIT COMMAND
 st.set_page_config(page_title="SkySniff Gas Leak Detection GUI", layout="wide")
@@ -36,8 +40,16 @@ def getGPSCoordinates():
     lon = round(base_lon + random.uniform(-0.005, 0.005), 6)
     return f"{lat}, {lon}"
 
-def getGasLeak():
-    return random.choice([0, 1])
+def getGasLeak(results: list):
+    # Check if any person is detected in the results
+    for result in results:
+        boxes = result.boxes
+        for box in boxes:
+            cls = int(box.cls)
+            conf = float(box.conf)
+            if COCO_CLASSES[cls] == "person" and conf > 0.5:
+                return True
+    return False
 
 def open_camera(webcam_id):
     cap = cv2.VideoCapture(webcam_id)
@@ -62,7 +74,7 @@ with tabs[0]:
         st.subheader("HD CAM")
         hd_frame_window = st.image([])
     with col2:
-        st.subheader("IR IMAGER")
+        st.subheader("IR IMAGER (Downscaled)")
         ir_frame_window = st.image([])
     with col3:
         st.subheader("FUSED IMAGE")
@@ -80,53 +92,81 @@ with tabs[0]:
     with col5:
         st.subheader("U-Net Model Output (Bounding Box - Person)")
         unet_frame_window = st.image([])
-
-    # Start button for webcam stream
-    run = st.checkbox("Start Live Feed", key="debug_run")
-
-    # Open cameras
-    try:
-        cap0 = open_camera(0)
-    except:
-        st.error("Webcam 0 (HD CAM) failed to open")
-        cap0 = None
-
-    try:
-        cap1 = open_camera(1)
-    except:
-        st.warning("Webcam 1 (IR Imager) failed to open")
-        cap1 = None
-
-    try:
-        cap2 = open_camera(2)
-    except:
-        st.warning("Webcam 2 (Fused) failed to open")
-        cap2 = None
-
-    while run and (cap0 or cap1 or cap2):
-        start_time = time.time()
-
-        # Update HD CAM
-        if cap0:
-            ret0, frame0 = cap0.read()
-            if ret0:
-                hd_frame_window.image(cv2.cvtColor(frame0, cv2.COLOR_BGR2RGB))
-
-        # Update IR IMAGER
-        if cap1:
-            ret1, frame1 = cap1.read()
-            if ret1:
-                ir_frame_window.image(cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB))
-
-        # Update FUSED IMAGE
-        if cap2:
-            ret2, frame2 = cap2.read()
-            if ret2:
-                fused_frame_window.image(cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB))
-
         # GPS and Gas Leak
         gps_text.write(f"Current GPS: `{getGPSCoordinates()}`")
-        gas_leak_text.markdown(f"### Gas Leak Detection: **{'TRUE' if getGasLeak() else 'FALSE'}**")
+        gas_leak_text.markdown(f"### Gas Leak Detection: **{'TRUE' if getGasLeak([]) else 'FALSE'}**")
+
+    # Start button for simulation
+    run = st.checkbox("Start Simulation", key="debug_run")
+
+    # Paths
+    vis_dir = "fusion_train_data/vi"
+    ir_dir = "fusion_train_data/ir"
+
+    # Get list of files
+    vis_files = sorted([
+        f for f in os.listdir(vis_dir)
+        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+    ])
+
+    idx = 0
+
+    while run and idx < len(vis_files):
+        start_time = time.time()
+
+        vis_path = os.path.join(vis_dir, vis_files[idx])
+        ir_path = os.path.join(ir_dir, vis_files[idx])
+
+        if not os.path.exists(ir_path):
+            st.warning(f"IR image missing for {vis_files[idx]}")
+            idx += 1
+            continue
+
+        # Load VIS image
+        vis_img = cv2.imread(vis_path)
+        if vis_img is None:
+            st.warning(f"Could not read image: {vis_path}")
+            idx += 1
+            continue
+
+        # Resize VIS to 640x480
+        vis_resized = cv2.resize(vis_img, (640, 480), interpolation=cv2.INTER_LINEAR)
+
+        # Load IR image and downscale for fusion
+        ir_img = cv2.imread(ir_path, cv2.IMREAD_GRAYSCALE)
+        if ir_img is None:
+            st.warning(f"Could not read IR image: {ir_path}")
+            idx += 1
+            continue
+
+        # Downscale IR for fusion, then upscale back to 640x480 for display
+        ir_downscaled = cv2.resize(ir_img, (256, 192), interpolation=cv2.INTER_AREA)
+        ir_display = cv2.resize(ir_downscaled, (640, 480), interpolation=cv2.INTER_NEAREST)
+        ir_display_color = cv2.applyColorMap(cv2.normalize(ir_display, None, 0, 255, cv2.NORM_MINMAX), cv2.COLORMAP_HOT)
+
+        # Fuse using imported function
+        fused_img = sensorfusion.get_fused_frame(vis_path, ir_path, target_size=(256, 192))
+
+        # Resize fused image to 640x480 if needed
+        fused_resized = cv2.resize(fused_img, (640, 480), interpolation=cv2.INTER_LINEAR)
+
+        # Update placeholders
+        hd_frame_window.image(cv2.cvtColor(vis_resized, cv2.COLOR_BGR2RGB), caption="HD CAM")
+        ir_frame_window.image(cv2.cvtColor(ir_display_color, cv2.COLOR_BGR2RGB), caption="IR IMAGER")
+        fused_frame_window.image(cv2.cvtColor(fused_resized, cv2.COLOR_BGR2RGB), caption="FUSED IMAGE")
+
+        # Increment index
+        idx = (idx + 1) % len(vis_files)
+            # Open HD camera
+        try:
+            cap0  = open_camera(0)  # Assuming webcam ID 0 for HD camera
+            ret0, frame0 = cap0.read()
+            if not ret0:
+                raise RuntimeError("Failed to read from HD camera")
+            frame0 = cv2.resize(frame0, (640, 480), interpolation=cv2.INTER_LINEAR)
+        except RuntimeError as e:
+            st.warning(str(e))
+            cap0 = None
 
         # U-Net Output using YOLOv8 for "person"
         if cap0 and ret0:
@@ -158,9 +198,13 @@ with tabs[0]:
             unet_frame_window.image(annotated_frame)
 
         # Maintain ~10 FPS
-        time.sleep(max(0.01, 0.1 - (time.time() - start_time)))
+        elapsed = time.time() - start_time
+        # time.sleep(max(0.1, 0.1 - elapsed))
+        if not run and idx > 0:
+            st.write("Simulation stopped.")
 
-    st.write("Stopped live feed.")
+
+
 
 # --- OPERATOR MODE ---
 with tabs[1]:
@@ -173,7 +217,7 @@ with tabs[1]:
         gas_op_text = st.empty()
 
     with colB:
-        st.subheader("Fused Sensor Image")
+        st.subheader("Fused Sensor Image with Bounding Boxes")
         fused_op_window = st.image([])
 
     with colC:
@@ -183,9 +227,8 @@ with tabs[1]:
     # Run checkbox
     run_op = st.checkbox("Start Live Feed", key="operator_run")
 
-    # Open fused camera
     try:
-        cap_fused = open_camera(2)
+        cap_fused = open_camera(0)  # Assuming webcam ID 2 for fused image
     except:
         st.warning("Fused image source not available")
         cap_fused = None
@@ -193,14 +236,47 @@ with tabs[1]:
     while run_op and cap_fused:
         start_time = time.time()
 
-        # Update fused image
-        ret, frame = cap_fused.read()
-        if ret:
-            fused_op_window.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        # Open fused camera
+        try:
+            ret0, frame0 = cap_fused.read()
+            if not ret0:
+                raise RuntimeError("Failed to read from HD camera")
+            frame0 = cv2.resize(frame0, (640, 480), interpolation=cv2.INTER_LINEAR)
+        except RuntimeError as e:
+            st.warning(str(e))
+
+        # U-Net Output using YOLOv8 for "person"
+        if cap_fused and ret0:
+            rgb_frame = cv2.cvtColor(frame0, cv2.COLOR_BGR2RGB)
+            results = model(rgb_frame)
+
+            annotated_frame = np.array(rgb_frame)
+
+            for result in results:
+                boxes = result.boxes
+                for box in boxes:
+                    cls = int(box.cls)
+                    conf = float(box.conf)
+                    if COCO_CLASSES[cls] == "person" and conf > 0.5:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        label = f"Person {conf:.2f}"
+                        color = (0, 255, 0)  # Green
+                        cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, 2)
+                        cv2.putText(
+                            annotated_frame,
+                            label,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            color,
+                            2
+                        )
+
+            fused_op_window.image(annotated_frame)
 
         # Update GPS and coordinates
         gps_op_text.write(f"Current GPS: `{getGPSCoordinates()}`")
-        gas_op_text.markdown(f"**Gas Leak Detected:** {'✅ TRUE' if getGasLeak() else '❌ FALSE'}")
+        gas_op_text.markdown(f"**Gas Leak Detected:** {'✅ TRUE' if getGasLeak(results) else '❌ FALSE'}")
         leak_coords = [getGPSCoordinates() for _ in range(random.randint(3, 5))]
         leak_coords_table.table(leak_coords)
 
@@ -211,4 +287,3 @@ with tabs[1]:
 
 # Footer
 st.markdown("<p style='text-align:center;'>(c) 2025 Recombinant Solutions Incorporated</p>", unsafe_allow_html=True)
-

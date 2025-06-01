@@ -111,7 +111,24 @@ def compare_images_folder(golden_dir, test_dir):
         'avg_psnr': avg_psnr,
         'total_images': len(ssim_scores)
     }
+# -------------------------------
+# Real-time Fusion for GUI
+# -------------------------------
+def get_fused_frame(vis_path, ir_path, target_size=(256, 192)):
+    """
+    Return fused image as a NumPy BGR array.
+    Used in real-time simulation like Streamlit GUI.
+    """
+    temp_dir = "temp_fused_debug"
+    os.makedirs(temp_dir, exist_ok=True)
 
+    filename = os.path.basename(vis_path)
+    output_path = os.path.join(temp_dir, filename)
+
+    fuse_images_with_overlay(vis_path, ir_path, output_path, target_size=target_size)
+    fused_img = cv2.imread(output_path)
+
+    return fused_img
 # -------------------------------
 # Main Execution
 # -------------------------------
