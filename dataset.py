@@ -6,8 +6,8 @@ from torch.utils.data import Dataset
 from pycocotools.coco import COCO
 
 # Module-level paths
-IMAGES_DIR = 'dataset/images'
-ANNOTATIONS_JSON = 'dataset/annotations.json'
+IMAGES_DIR = '/Users/ericvu/CSE145/dataset/images'
+ANNOTATIONS_JSON = '/Users/ericvu/CSE145/dataset/annotations.json'
 
 # Sanity checks for dataset paths
 def _check_paths():
