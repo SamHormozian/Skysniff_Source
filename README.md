@@ -1,6 +1,16 @@
 # SkySniff Gas Leak Drone
+Welcome to the Basketball Smart Referee project! This README will guide you through the project's purpose, implementation details, usage, and show the results of our method.
 
-## Setup
+Team:
+
+Russ Sobti
+Sam Hormozian 
+Eric Vu
+
+## Abstract
+Gas leaks are a large driver of unexpected greenhouse gas emissions and can pose major safety risks in the industrial and utility sectors. Volatile Organic Compounds (VOCs) such as Carbon Monoxide are often imperceptible in low concentrations, and thus problems are hard to notice until they reach criticality. Aerial OGI systems are beginning to emerge for the Oil and Gas sectors, how-ever the six-figure cost of an aerial OGI system in addition to the large size of currently-fielded drones from ArcSky and similar lead to safety and fieldability concerns for smaller operations. SkySniff offers a sub-$1000 platform that uses a microdrone equipped with a ITAR-free IR camera to provide similar ability to identify gas leaks while enabling indoor operation and increased fieldability. SkySniff is a middle-ground solution between manual inspection with a handheld IR imager such as the FLIR One® and the currently commercially available drones with IR payload options such as the ArcSky X55 with Aerial OGI payload. We successfully demonstrate the ability to 1) automatically identify gas leaks from IR spectrum data, 2) the ability to integrate IR data into visual camera data, and 3) the integration of both models and systems into an affordable drone platform using off-the-shelf analog 5.8Ghz video telemetry. We did this through showing the system working with real-time streamed data in an operable format.
+
+## Setup/Installation
 
 ### Create Virtual Environment:
 
@@ -38,9 +48,9 @@ rm -rf .env
 
 ---
 
-## Pipeline
+## How to Run
 
-### `dataset.py` — Dataset Module
+### `dataset.py` — Dataset and Annotation Module
 
 - **Path sanity checks**
 
@@ -67,6 +77,12 @@ rm -rf .env
 
   Running `python dataset.py` prints the dataset length and shapes/dtypes of one `(image_tensor, mask_tensor)` pair to verify setup before training.
 
+### U-Net Trainer
+  - Trains the U-net model on the data prepared by `dataset.py` and returns a Pytorch model file for consumption by gui.py
+
+### Operator GUI
+  - Run the Operator GUI to connect the models with the telemetry. See below for the User Guide. 
+
 ---
 
 ## Hardware Setup
@@ -76,19 +92,19 @@ Before launching the application, ensure the following hardware components are p
 ### Required Components
 
 - Two **5.8GHz Video Transmitter/Receiver Modules**
-- HD Camera (for visible light feed)
-- IR Camera (for thermal imaging)
-- Drone or mounting system for cameras
-- USB ports available for receiver devices
+- HD Camera (for visible light feed) + 5.8GHz VTX
+- IR Camera (for thermal imaging) + 5.8GHz VTX
+- Drone or mounting system for cameras + 3.3V power for VTXes)
+- 2 USB ports available for receiver devices
 
 ### Pairing Instructions
 
 1. **Plug in both 5.8GHz video receivers** into available USB ports on your computer/device.
-2. Make sure the receivers are set to the **same frequency channel** using dip switches or auto-pairing method provided by the manufacturer.
-3. Power on both camera modules (HD and IR).
-4. Verify that the signal is being received by checking for stable video output from both devices.
+2. Make sure the receivers are set to the **correct frequency channel for their corresponding VTX** using buttons or autopair mode. VTXes can be configured to select frequencies in Betaflight.
+4. Power on both camera modules (HD and IR).
+5. Verify that the signal is being received by checking for stable video output from both devices.
 
-> 📌 **Important:** The receivers must be successfully paired and recognized by the system **before starting the application**, otherwise the webcam feeds will fail to initialize.
+> 📌 **Important:** The receivers must be successfully paired and recognized by the system **before starting the application**, otherwise the webcam feeds will fail to initialize or just show Blue Screen/Static.
 
 ---
 
