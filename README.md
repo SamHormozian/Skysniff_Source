@@ -3,9 +3,9 @@ Welcome to the Basketball Smart Referee project! This README will guide you thro
 
 Team:
 
-Russ Sobti
-Sam Hormozian 
-Eric Vu
+- Russ Sobti
+- Sam Hormozian 
+- Eric Vu
 
 ## Abstract
 Gas leaks are a large driver of unexpected greenhouse gas emissions and can pose major safety risks in the industrial and utility sectors. Volatile Organic Compounds (VOCs) such as Carbon Monoxide are often imperceptible in low concentrations, and thus problems are hard to notice until they reach criticality. Aerial OGI systems are beginning to emerge for the Oil and Gas sectors, how-ever the six-figure cost of an aerial OGI system in addition to the large size of currently-fielded drones from ArcSky and similar lead to safety and fieldability concerns for smaller operations. SkySniff offers a sub-$1000 platform that uses a microdrone equipped with a ITAR-free IR camera to provide similar ability to identify gas leaks while enabling indoor operation and increased fieldability. SkySniff is a middle-ground solution between manual inspection with a handheld IR imager such as the FLIR One® and the currently commercially available drones with IR payload options such as the ArcSky X55 with Aerial OGI payload. We successfully demonstrate the ability to 1) automatically identify gas leaks from IR spectrum data, 2) the ability to integrate IR data into visual camera data, and 3) the integration of both models and systems into an affordable drone platform using off-the-shelf analog 5.8Ghz video telemetry. We did this through showing the system working with real-time streamed data in an operable format.
