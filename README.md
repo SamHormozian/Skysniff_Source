@@ -1,78 +1,143 @@
-# Gas_Leak_Drone
+# SkySniff Gas Leak Drone
 
-## Create Virtual Env:
+## Setup
 
-```
+### Create Virtual Environment:
+
+```bash
 cd /path/to/your/project
 python3 -m venv .env
-
 ```
 
-## Activate it
+### Activate It
 
-```
-
+```bash
 source .env/bin/activate
-
 ```
 
-## Install Dependencies
+### Install Dependencies
 
-```
+```bash
 pip install --upgrade pip
-pip install torch torchvision pycocotools opencv-python tensorboard
-
+pip install torch torchvision pycocotools opencv-python tensorboard streamlit streamlit-autorefresh ultralytics numpy pillow scikit-image
 ```
 
-## Deactivate after finished
+> 💡 **Note**: The additional packages (`streamlit`, `ultralytics`, etc.) are required for running and developing the GUI.
 
-```
+### Deactivate After Finished
 
+```bash
 deactivate
-rm -rf .env
-
 ```
 
-# Pipeline
+To clean up:
 
-## Dataset.py:
-- Path sanity checks
+```bash
+rm -rf .env
+```
 
-    - As soon as the module loads, it verifies that both the dataset/images directory and the dataset/annotations.json file actually exist, to path errors immediately.
+---
 
-- COCO annotation loading & class mapping
+## Pipeline
 
-    - It uses the COCO API to read JSON file, pulls out all category entries, normalizes their names (lower-cases and trims) and builds two dictionaries:
+### `dataset.py` — Dataset Module
 
-    - name2label: maps "gas leak day"→1, "gas leak night"→2 for your mask values
+- **Path sanity checks**
 
-    - name2catid: maps normalized names back to the original COCO category IDs for filtering
+  As soon as the module loads, it verifies that both the `dataset/images` directory and the `dataset/annotations.json` file exist, catching path errors early.
+- **COCO annotation loading & class mapping**
 
- - Image indexing
+  Uses the COCO API to read the JSON file, extracts category entries, normalizes names (lowercase + trim), and builds two dictionaries:
 
-    - By querying COCO with those two category IDs, it collects the set of all image IDs that contain at least one “day” or “night” gas-leak annotation.
+  - `name2label`: maps `"gas leak day"` → `1`, `"gas leak night"` → `2`
+  - `name2catid`: maps normalized names back to original COCO category IDs for filtering
+- **Image indexing**
 
-    - That list becomes the universe of samples exposed by the dataset.
+  Queries COCO using those category IDs to collect all image IDs containing gas leak annotations. This list becomes the dataset universe.
+- **Sample retrieval (`__getitem__`)**
 
-- Sample retrieval (__getitem__)
+  For each index:
 
-    - For a given index it:
+  - Loads RGB image into a NumPy array → converts to `[3×H×W]` float tensor.
+  - Builds a single-channel mask initialized with zeros.
+  - Rasterizes polygon annotations from relevant classes and stamps in their labels (1 or 2).
+  - Converts mask to `[H×W]` long tensor.
+  - Applies user-defined transforms (e.g., normalization, random flips) to both image and mask.
+- **Smoke-test entry point**
 
-        - Loads the RGB image from disk into a NumPy array, converts to a [3×H×W] float tensor.
+  Running `python dataset.py` prints the dataset length and shapes/dtypes of one `(image_tensor, mask_tensor)` pair to verify setup before training.
 
-        - Initializes a single-channel mask of zeros (H×W), then for each polygon annotation of the two classes rasterizes it into a binary mask and stamps in its class label (1 or 2).
+---
 
-        - Converts that mask into a [H×W] long tensor.
+## Hardware Setup
 
-        - Applies any user-supplied transforms to both image and mask (e.g. random flips, normalization).
+Before launching the application, ensure the following hardware components are properly configured:
 
-- Smoke-test entry point
+### Required Components
 
-    - Running python dataset.py prints out the dataset length and the shapes/dtypes of one (image_tensor, mask_tensor) pair to confirm everything’s wired up before training.
+- Two **5.8GHz Video Transmitter/Receiver Modules**
+- HD Camera (for visible light feed)
+- IR Camera (for thermal imaging)
+- Drone or mounting system for cameras
+- USB ports available for receiver devices
 
+### Pairing Instructions
 
+1. **Plug in both 5.8GHz video receivers** into available USB ports on your computer/device.
+2. Make sure the receivers are set to the **same frequency channel** using dip switches or auto-pairing method provided by the manufacturer.
+3. Power on both camera modules (HD and IR).
+4. Verify that the signal is being received by checking for stable video output from both devices.
 
+> 📌 **Important:** The receivers must be successfully paired and recognized by the system **before starting the application**, otherwise the webcam feeds will fail to initialize.
 
+---
 
+## GUI (SkySniff Gas Leak Detection GUI)
 
+A real-time visualization interface built with **Streamlit** to support both engineering debugging and field operator use cases.
 
+### Features
+
+| Mode                    | Description                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **DEBUG mode**    | Shows VIS, IR (downscaled to 256x192), and fused images side-by-side at 10 FPS from a pre-recorded dataset loop |
+| **OPERATOR mode** | Live webcam feed showing fused sensor output, GPS coordinates, and gas leak detection status                    |
+
+### GUI Components
+
+- **Live Webcam Fusion**
+
+  - Supports multiple camera inputs (HD CAM, IR IMAGER, FUSED IMAGE)
+  - Uses `sensorfusion.py` for real-time overlay logic
+- **Bounding Box Detection**
+
+  - Uses YOLOv8s model to detect **"person"** class only
+  - Draws green bounding boxes around people in U-Net Output section
+- **Sensor Fusion Engine**
+
+  - Integrated via `sensorfusion.py`
+  - IR image is downsampled before fusion, then upscaled to match HD CAM resolution (640x480)
+
+### How to Run
+
+Make sure you're in the activated virtual environment:
+
+```bash
+streamlit run gui.py
+```
+
+> 📁 Ensure that your webcam devices are available at indices `0`, `1`, and `2` for full functionality.
+
+---
+
+## Optional: Sensor Fusion System (`sensorfusion.py`)
+
+Handles:
+
+- IR colormap application
+- Image resizing/downscaling
+- Real-time image fusion using transparency overlay
+- Batch processing with downscaling
+- SSIM/PSNR comparison between outputs
+
+---
