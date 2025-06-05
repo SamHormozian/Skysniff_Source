@@ -1,0 +1,5 @@
+<script>start("/Users/samhormozian/Desktop/dataset copy/");</script>
+<script>onHasParentDirectory();</script>
+<script>addRow("images","images",1,176576,"172 kB",1745952314,"29/04/2025, 11:45:14");</script>
+<script>addRow(".DS_Store",".DS_Store",0,6148,"6.0 kB",1745951830,"29/04/2025, 11:37:10");</script>
+<script>addRow("annotations.json","annotations.json",0,2995957,"2.9 MB",1745909580,"28/04/2025, 23:53:00");</script>
