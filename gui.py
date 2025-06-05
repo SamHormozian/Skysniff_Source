@@ -328,7 +328,7 @@ with tabs[2]:
             classes=NUM_CLASSES
         ).to(DEVICE)
 
-        model.load_state_dict(torch.load("unet_gas_leak_segmentation2.pt", map_location=DEVICE))
+        model.load_state_dict(torch.load("unet_gas_leak_segmentation_final.pth", map_location=DEVICE))
         model.eval()
         return model
 
@@ -343,7 +343,7 @@ with tabs[2]:
 
     # Start webcam capture
     if run_detector:
-        cap = cv2.VideoCapture(2)
+        cap = cv2.VideoCapture(1)
         if not cap.isOpened():
             st.error("❌ Could not open webcam (ID 2)")
         else:

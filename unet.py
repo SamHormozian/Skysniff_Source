@@ -151,7 +151,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)  # Increased LR slightly
 
     # Optional: Add learning rate scheduler
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2)
 
     best_val_loss = float('inf')
 
