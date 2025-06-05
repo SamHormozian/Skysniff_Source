@@ -13,7 +13,7 @@ from dataset import GasLeakSegDataset  # Ensure dataset.py exists and works
 BATCH_SIZE = 8
 NUM_EPOCHS = 5
 NUM_CLASSES = 3  # 0=Background, 1=Gas Leak Day, 2=Gas Leak Night
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.mps.is_available else 'cpu')
 ENCODER = 'resnet34'
 ENCODER_WEIGHTS = 'imagenet'
 
@@ -156,7 +156,7 @@ def main():
         val_loss = validate(model, val_loader, loss_fn)
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
-    torch.save(model.state_dict(), "unet_gas_leak_segmentation.pth")
+    torch.save(model.state_dict(), "unet_gas_leak_segmentation2.pth")
     print("✅ Model saved to 'unet_gas_leak_segmentation.pth'")
 
 if __name__ == "__main__":
