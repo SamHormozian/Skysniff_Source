@@ -179,3 +179,4 @@ cython_debug/
 dataset/
 .DS_Store
 unet_gas_leak_segmentation2.pth
+unet_gas_leak_segmentation_best.pth
