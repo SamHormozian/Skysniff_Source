@@ -11,11 +11,11 @@ from dataset import GasLeakSegDataset  # Ensure dataset.py exists and works
 
 # --- Configuration ---
 BATCH_SIZE = 8
-NUM_EPOCHS = 5
+NUM_EPOCHS = 20  # Reduced for faster training
 NUM_CLASSES = 3  # 0=Background, 1=Gas Leak Day, 2=Gas Leak Night
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.mps.is_available else 'cpu')
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 ENCODER = 'resnet34'
-ENCODER_WEIGHTS = 'imagenet'
+ENCODER_WEIGHTS = 'imagenet'  # Already uses ImageNet pre-trained weights
 
 # --- Albumentations-to-PyTorch Wrapper ---
 class AlbumentationsTransform:
@@ -148,16 +148,30 @@ def main():
     ).to(DEVICE)
 
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)  # Increased LR slightly
+
+    # Optional: Add learning rate scheduler
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, verbose=True)
+
+    best_val_loss = float('inf')
 
     for epoch in range(NUM_EPOCHS):
         print(f"\nEpoch {epoch + 1}/{NUM_EPOCHS}")
         train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer)
         val_loss = validate(model, val_loader, loss_fn)
+
+        scheduler.step(val_loss)
+
         print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
-    torch.save(model.state_dict(), "unet_gas_leak_segmentation2.pth")
-    print("✅ Model saved to 'unet_gas_leak_segmentation.pth'")
+        # Save best model
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), "unet_gas_leak_segmentation_best.pth")
+            print("✅ Best model saved.")
+
+    torch.save(model.state_dict(), "unet_gas_leak_segmentation_final.pth")
+    print("✅ Final model saved.")
 
 if __name__ == "__main__":
     main()

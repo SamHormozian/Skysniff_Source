@@ -178,3 +178,4 @@ cython_debug/
 # Ignore raw dataset images
 dataset/
 .DS_Store
+unet_gas_leak_segmentation2.pth

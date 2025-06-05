@@ -9,6 +9,23 @@ from PIL import Image
 from ultralytics import YOLO
 import random
 import sensorfusion  # custom module
+import os
+import torch
+import numpy as np
+from torch.utils.data import DataLoader, random_split
+import segmentation_models_pytorch as smp
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import torch.nn as nn
+from tqdm import tqdm
+from dataset import GasLeakSegDataset  # Ensure dataset.py exists and works
+# --- Configuration ---
+BATCH_SIZE = 8
+NUM_EPOCHS = 5
+NUM_CLASSES = 3  # 0=Background, 1=Gas Leak Day, 2=Gas Leak Night
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.mps.is_available else 'cpu')
+ENCODER = 'resnet34'
+ENCODER_WEIGHTS = 'imagenet'
 
 # MUST BE FIRST STREAMLIT COMMAND
 st.set_page_config(page_title="SkySniff Gas Leak Detection GUI", layout="wide")
@@ -60,7 +77,7 @@ def open_camera(webcam_id):
 # Title
 st.markdown("<h1 style='text-align:center;'>SkySniff Gas Leak Detection GUI</h1>", unsafe_allow_html=True)
 
-tabs = st.tabs(["DEBUG mode", "OPERATOR mode"])
+tabs = st.tabs(["DEBUG mode", "OPERATOR mode", "GAS LEAK DETECTOR"])
 
 # --- DEBUG MODE ---
 with tabs[0]:
@@ -284,6 +301,101 @@ with tabs[1]:
         time.sleep(max(0.01, 0.1 - (time.time() - start_time)))
 
     st.write("Operator feed stopped.")
+
+# --- GAS LEAK DETECTOR ---
+with tabs[2]: 
+    st.markdown("<h2 style='color:#0088cc;text-align:center;'>Gas Leak Detector</h2>", unsafe_allow_html=True)
+
+    colA, colB = st.columns(2)
+
+    with colA:
+        st.subheader("IR Camera Feed")
+        ir_feed_window = st.image([])
+
+    with colB:
+        st.subheader("Leak Detection Output")
+        leak_feed_window = st.image([])
+
+    run_detector = st.checkbox("Start Gas Leak Detection", key="leak_run")
+
+    # Load model
+    @st.cache_resource
+    def load_model():
+        model = smp.Unet(
+            encoder_name=ENCODER,
+            encoder_weights=None,  # Not needed for inference
+            in_channels=3,
+            classes=NUM_CLASSES
+        ).to(DEVICE)
+
+        model.load_state_dict(torch.load("unet_gas_leak_segmentation2.pt", map_location=DEVICE))
+        model.eval()
+        return model
+
+    model = load_model()
+
+    # Color maps for visualization
+    class_colors = np.array([
+        [0, 0, 0],           # Background - black
+        [0, 255, 255],       # Gas Leak Day - cyan
+        [255, 0, 0],         # Gas Leak Night - red
+    ], dtype=np.uint8)
+
+    # Start webcam capture
+    if run_detector:
+        cap = cv2.VideoCapture(2)
+        if not cap.isOpened():
+            st.error("❌ Could not open webcam (ID 2)")
+        else:
+            progress_bar = st.progress(0)
+            frame_count = 0
+            try:
+                while run_detector:
+                    start_time = time.time()
+
+                    ret, frame = cap.read()
+                    if not ret:
+                        st.warning("⚠️ Failed to read from webcam.")
+                        break
+
+                    # Resize and normalize
+                    original_frame = frame.copy()
+                    resized_frame = cv2.resize(frame, (480, 320))  # Match model input size
+                    rgb_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
+                    normalized = A.Normalize()(image=rgb_frame)['image']
+                    tensor_img = ToTensorV2()(image=normalized)['image'].unsqueeze(0).to(DEVICE)
+
+                    # Run inference
+                    with torch.no_grad():
+                        output = model(tensor_img)
+                        pred_mask = torch.argmax(output, dim=1).cpu().numpy()[0]
+
+                    # Map mask to colors
+                    color_mask = class_colors[pred_mask]
+
+                    # Resize mask to match original frame
+                    color_mask_resized = cv2.resize(color_mask, (original_frame.shape[1], original_frame.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+                    # Overlay mask on original frame
+                    overlayed = cv2.addWeighted(original_frame, 0.6, color_mask_resized, 0.4, 0)
+
+                    # Display frames
+                    ir_feed_window.image(cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB), caption="IR Input")
+                    leak_feed_window.image(cv2.cvtColor(overlayed, cv2.COLOR_BGR2RGB), caption="Detected Leaks")
+
+                    # Update progress bar
+                    frame_count = (frame_count + 1) % 100
+                    progress_bar.progress((frame_count + 1) % 100)
+
+                    # Maintain ~10 FPS
+                    elapsed = time.time() - start_time
+                    time.sleep(max(0.01, 0.1 - elapsed))
+
+            finally:
+                cap.release()
+                progress_bar.empty()
+                st.write("✅ Gas leak detection stopped.")
+
 
 # Footer
 st.markdown("<p style='text-align:center;'>(c) 2025 Recombinant Solutions Incorporated</p>", unsafe_allow_html=True)
