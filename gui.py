@@ -48,7 +48,7 @@ def load_model():
     return YOLO("yolov8s.pt")  # Automatically downloads if not present
 
 model = load_model()
-
+results = []  # Placeholder for results
 # Simulated Functions
 def getGPSCoordinates():
     base_lat = 37.7749
@@ -111,7 +111,7 @@ with tabs[0]:
         unet_frame_window = st.image([])
         # GPS and Gas Leak
         gps_text.write(f"Current GPS: `{getGPSCoordinates()}`")
-        gas_leak_text.markdown(f"### Gas Leak Detection: **{'TRUE' if getGasLeak([]) else 'FALSE'}**")
+        gas_leak_text.markdown(f"**Gas Leak Detected:** {'✅ TRUE' if getGasLeak(results) else '❌ FALSE'}")
 
     # Start button for simulation
     run = st.checkbox("Start Simulation", key="debug_run")
@@ -213,6 +213,7 @@ with tabs[0]:
                         )
 
             unet_frame_window.image(annotated_frame)
+            gas_leak_text.markdown(f"**Gas Leak Detected:** {'✅ TRUE' if getGasLeak(results) else '❌ FALSE'}")
 
         # Maintain ~10 FPS
         elapsed = time.time() - start_time

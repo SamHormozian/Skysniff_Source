@@ -8,14 +8,24 @@ from albumentations.pytorch import ToTensorV2
 import torch.nn as nn
 from tqdm import tqdm
 from dataset import GasLeakSegDataset  # Ensure dataset.py exists and works
+import warnings
+from urllib3.exceptions import NotOpenSSLWarning
+# ignore any OpenSSL warnings
+warnings.filterwarnings(
+    "ignore",
+    category=NotOpenSSLWarning,
+)
+warnings.filterwarnings("ignore", module="urllib3")
+
 
 # --- Configuration ---
-BATCH_SIZE = 8
-NUM_EPOCHS = 20  # Reduced for faster training
+BATCH_SIZE = 10
+NUM_EPOCHS = 100  # Reduced for faster training
 NUM_CLASSES = 3  # 0=Background, 1=Gas Leak Day, 2=Gas Leak Night
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 ENCODER = 'resnet34'
 ENCODER_WEIGHTS = 'imagenet'  # Already uses ImageNet pre-trained weights
+torch.backends.cudnn.benchmark = True
 
 # --- Albumentations-to-PyTorch Wrapper ---
 class AlbumentationsTransform:
@@ -137,8 +147,18 @@ def main():
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
     val_dataset.dataset.transforms = AlbumentationsTransform(val_transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+    # train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    train_loader = DataLoader(
+    train_dataset, batch_size=BATCH_SIZE, shuffle=True,
+    num_workers=8, pin_memory=True,
+    persistent_workers=True, prefetch_factor=2
+)
+    # val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
+    val_loader = DataLoader(
+    val_dataset, batch_size=BATCH_SIZE, shuffle=True,
+    num_workers=8, pin_memory=True,
+    persistent_workers=True, prefetch_factor=2
+)
 
     model = smp.Unet(
         encoder_name=ENCODER,
@@ -146,6 +166,8 @@ def main():
         in_channels=3,
         classes=NUM_CLASSES
     ).to(DEVICE)
+    # model = torch.compile(model)
+
 
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)  # Increased LR slightly
